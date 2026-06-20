@@ -36,26 +36,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def on_startup(bot: Bot):
-    logger.info("🚀 Запуск бота...")
-    await init_db()
-    init_scheduler()
-    await restore_reminders(bot)
-    try:
-        await bot.send_message(ADMIN_ID, "✅ Бот успешно запущен")
-    except Exception as e:
-        logger.warning(f"Не удалось уведомить админа: {e}")
-
-
-async def on_shutdown(bot: Bot):
-    logger.info("🛑 Остановка бота...")
-    shutdown_scheduler()
-
-
-async def health_check(request):
-    return web.Response(text="OK")
-
-
 async def main_webhook():
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN не установлен!")
@@ -72,6 +52,7 @@ async def main_webhook():
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
+    # === Правильная настройка webhook ===
     webhook_url = os.getenv("WEBHOOK_URL") or os.getenv("RENDER_EXTERNAL_HOSTNAME")
     if not webhook_url:
         logger.error("❌ WEBHOOK_URL не задан!")
@@ -84,9 +65,15 @@ async def main_webhook():
     await bot.set_webhook(full_webhook_url)
     logger.info(f"Webhook установлен: {full_webhook_url}")
 
+    # === Правильный обработчик webhook ===
+    async def handle_webhook(request):
+        update = types.Update(**await request.json())
+        await dp.feed_update(bot, update)
+        return web.Response()
+
     app = web.Application()
     app.router.add_get("/health", health_check)
-    app.router.add_post("/webhook", dp.feed_webhook_update)
+    app.router.add_post("/webhook", handle_webhook)
 
     port = int(os.getenv("PORT", 10000))
     runner = web.AppRunner(app)
@@ -96,35 +83,3 @@ async def main_webhook():
 
     logger.info(f"🚀 Webhook сервер запущен на порту {port}")
     await asyncio.Event().wait()
-
-
-async def main_polling():
-    if not BOT_TOKEN:
-        logger.error("❌ BOT_TOKEN не установлен!")
-        return
-
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher(storage=MemoryStorage())
-
-    dp.include_router(start_router)
-    dp.include_router(booking_router)
-    dp.include_router(admin_router)
-    dp.include_router(common_router)
-
-    dp.startup.register(on_startup)
-    dp.shutdown.register(on_shutdown)
-
-    logger.info("🤖 Бот запускается в режиме Polling...")
-    await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-    use_webhook = bool(
-        os.getenv("RENDER_EXTERNAL_HOSTNAME") or 
-        os.getenv("RAILWAY_PUBLIC_DOMAIN") or 
-        os.getenv("WEBHOOK_URL")
-    )
-    if use_webhook:
-        asyncio.run(main_webhook())
-    else:
-        asyncio.run(main_polling())
