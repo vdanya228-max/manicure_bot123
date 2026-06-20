@@ -26,7 +26,6 @@ async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
 
-    # Проверяем подписку
     is_sub = await check_subscription(user_id, message.bot)
 
     if not is_sub:
@@ -37,6 +36,14 @@ async def cmd_start(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
         return
+
+    is_admin_user = user_id == ADMIN_ID
+    await message.answer(
+        "💅 <b>Добро пожаловать в бот записи на маникюр!</b>\n\n"
+        "Выберите действие:",
+        reply_markup=get_main_menu_keyboard(is_subscribed=True, is_admin=is_admin_user),
+        parse_mode="HTML"
+    )
 
     # Если подписан — показываем главное меню
     is_admin_user = user_id == ADMIN_ID
