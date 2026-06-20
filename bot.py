@@ -61,12 +61,11 @@ async def handle_webhook(request):
 
 
 async def main_webhook():
-    global bot, dp
-
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN не установлен!")
         return
 
+    # Создаём бота и диспетчер
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
 
@@ -74,6 +73,11 @@ async def main_webhook():
     dp.include_router(booking_router)
     dp.include_router(admin_router)
     dp.include_router(common_router)
+
+    # === Важно: инициализируем БД сразу ===
+    await init_db()
+    init_scheduler()
+    await restore_reminders(bot)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
@@ -91,6 +95,24 @@ async def main_webhook():
     await bot.set_webhook(full_webhook_url)
     logger.info(f"Webhook установлен: {full_webhook_url}")
 
+    # Обработчик webhook
+    async def handle_webhook(request):
+        update = types.Update(**await request.json())
+        await dp.feed_update(bot, update)
+        return web.Response()
+
+    app = web.Application()
+    app.router.add_get("/health", health_check)
+    app.router.add_post("/webhook", handle_webhook)
+
+    port = int(os.getenv("PORT", 10000))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+    logger.info(f"🚀 Webhook сервер запущен на порту {port}")
+    await asyncio.Event().wait()
     # Создаём веб-приложение
     app = web.Application()
     app.router.add_get("/health", health_check)
