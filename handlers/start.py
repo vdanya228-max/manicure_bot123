@@ -6,6 +6,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
+
 from keyboards import (
     get_main_menu_keyboard,
     get_subscription_keyboard,
