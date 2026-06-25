@@ -6,7 +6,6 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
-
 from keyboards import (
     get_main_menu_keyboard,
     get_subscription_keyboard,
@@ -21,29 +20,21 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
-@router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext):
-    await state.clear()
-    user_id = message.from_user.id
-
-    is_sub = await check_subscription(user_id, message.bot)
-
+@router.callback_query(F.data == "book")
+async def start_booking(callback: CallbackQuery, state: FSMContext):
+    """Начать процесс записи"""
+    await callback.answer()                    # ← Добавь это в самое начало!
+    
+    user_id = callback.from_user.id
+    
+    # Проверка подписки
+    is_sub = await check_subscription(user_id, callback.bot)
     if not is_sub:
-        await message.answer(
-            "⚠️ <b>Для записи необходимо подписаться на наш канал.</b>\n\n"
-            "После подписки нажмите «Проверить подписку».",
+        await callback.message.edit_text(
+            "⚠️ <b>Для записи необходимо подписаться на канал.</b>",
             reply_markup=get_subscription_keyboard(),
             parse_mode="HTML"
         )
-        return
-
-    is_admin_user = user_id == ADMIN_ID
-    await message.answer(
-        "💅 <b>Добро пожаловать в бот записи на маникюр!</b>\n\n"
-        "Выберите действие:",
-        reply_markup=get_main_menu_keyboard(is_subscribed=True, is_admin=is_admin_user),
-        parse_mode="HTML"
-    )
         return
     
     # Проверка: уже есть запись?
